@@ -21,22 +21,22 @@ type ProcessMetrics struct {
 func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
 	proc, err := process.NewProcess(int32(pid))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not open PID %d: %w", pid, err)
 	}
 	m := &ProcessMetrics{}
 	m.cpu, err = proc.CPUPercent()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read CPU usage of PID %d: %w", pid, err)
 	}
 	mem, err := proc.MemoryInfo()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read memory info of PID %d: %w", pid, err)
 	}
 	m.ram = mem.RSS
 	m.swap = mem.Swap
 	ioDisk, err := proc.IOCounters()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read disk IO info of PID %d: %w", pid, err)
 	}
 	m.diskReadBytes = ioDisk.ReadBytes
 	m.diskWriteBytes = ioDisk.WriteBytes
@@ -44,10 +44,10 @@ func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
 	m.diskWriteCount = ioDisk.WriteCount
 	ioNet, err := proc.NetIOCounters(false)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not read net IO info of PID %d: %w", pid, err)
 	}
 	if len(ioNet) > 1 {
-		return nil, fmt.Errorf("got IO info for all NICs seperately when sum was requested")
+		return nil, fmt.Errorf("got IO info for multiple NICs seperately when total sum was requested for PID %d", pid)
 	}
 	if len(ioNet) == 1 {
 		m.networkInBytes = ioNet[0].BytesRecv
