@@ -10,16 +10,14 @@ import (
 )
 
 type PrometheusProcessMetrics struct {
-	previousMetrics      *ProcessMetrics
-	cpuGauge             prometheus.Gauge
-	ramGauge             prometheus.Gauge
-	swapGauge            prometheus.Gauge
-	diskReadBytesGauge   prometheus.Gauge
-	diskWriteBytesGauge  prometheus.Gauge
-	diskReadCountGauge   prometheus.Gauge
-	diskWriteCountGauge  prometheus.Gauge
-	networkInBytesGauge  prometheus.Gauge
-	networkOutBytesGauge prometheus.Gauge
+	previousMetrics     *ProcessMetrics
+	cpuGauge            prometheus.Gauge
+	ramGauge            prometheus.Gauge
+	swapGauge           prometheus.Gauge
+	diskReadBytesGauge  prometheus.Gauge
+	diskWriteBytesGauge prometheus.Gauge
+	diskReadCountGauge  prometheus.Gauge
+	diskWriteCountGauge prometheus.Gauge
 }
 
 func newPrometheusProcessMetrics(proc ps.Process, descriptiveName, metricNamespace string) (processMetrics *PrometheusProcessMetrics) {
@@ -28,7 +26,6 @@ func newPrometheusProcessMetrics(proc ps.Process, descriptiveName, metricNamespa
 	pid := fmt.Sprintf("%d", proc.Pid())
 	processMetrics.makeGauges(metricNamespace, pid, binaryName, descriptiveName)
 	processMetrics.makeDiskGauges(metricNamespace, pid, binaryName, descriptiveName)
-	processMetrics.makeNetworkGauges(metricNamespace, pid, binaryName, descriptiveName)
 	return processMetrics
 }
 
@@ -80,21 +77,6 @@ func (pm *PrometheusProcessMetrics) makeDiskGauges(metricNamespace, pid, binaryN
 	})
 }
 
-func (pm *PrometheusProcessMetrics) makeNetworkGauges(metricNamespace, pid, binaryName, descriptiveName string) {
-	pm.networkInBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace:   metricNamespace,
-		Name:        "net_read_bytes",
-		Help:        "Total read from disk (bytes)",
-		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
-	})
-	pm.networkOutBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace:   metricNamespace,
-		Name:        "net_write_bytes",
-		Help:        "Total written to disk (bytes)",
-		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
-	})
-}
-
 func (pm *PrometheusProcessMetrics) Register() error {
 	registeredCollectors := make([]prometheus.Collector, 0)
 	var err error
@@ -106,8 +88,6 @@ func (pm *PrometheusProcessMetrics) Register() error {
 		pm.diskWriteBytesGauge,
 		pm.diskReadCountGauge,
 		pm.diskWriteCountGauge,
-		pm.networkInBytesGauge,
-		pm.networkOutBytesGauge,
 	} {
 		err = prometheus.Register(collector)
 		if err != nil {
@@ -146,7 +126,5 @@ func (pm *PrometheusProcessMetrics) Set(processMetrics *ProcessMetrics) {
 	pm.diskWriteBytesGauge.Set(float64(processMetrics.diskWriteBytes))
 	pm.diskReadCountGauge.Set(float64(processMetrics.diskReadCount))
 	pm.diskWriteCountGauge.Set(float64(processMetrics.diskWriteCount))
-	pm.networkInBytesGauge.Set(float64(processMetrics.networkInBytes))
-	pm.networkOutBytesGauge.Set(float64(processMetrics.networkOutBytes))
 	pm.previousMetrics = processMetrics
 }

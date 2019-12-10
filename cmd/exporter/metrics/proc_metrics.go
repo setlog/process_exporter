@@ -8,16 +8,14 @@ import (
 )
 
 type ProcessMetrics struct {
-	cpuDuration     float64
-	cpuSampleTime   time.Time
-	ram             uint64
-	swap            uint64
-	diskReadBytes   uint64
-	diskWriteBytes  uint64
-	diskReadCount   uint64
-	diskWriteCount  uint64
-	networkInBytes  uint64
-	networkOutBytes uint64
+	cpuDuration    float64
+	cpuSampleTime  time.Time
+	ram            uint64
+	swap           uint64
+	diskReadBytes  uint64
+	diskWriteBytes uint64
+	diskReadCount  uint64
+	diskWriteCount uint64
 }
 
 func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
@@ -45,16 +43,5 @@ func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
 	m.diskWriteBytes = ioDisk.WriteBytes
 	m.diskReadCount = ioDisk.ReadCount
 	m.diskWriteCount = ioDisk.WriteCount
-	ioNet, err := proc.NetIOCounters(false)
-	if err != nil {
-		return nil, fmt.Errorf("could not read net IO info of PID %d: %w", pid, err)
-	}
-	if len(ioNet) > 1 {
-		return nil, fmt.Errorf("got IO info for multiple NICs seperately when total sum was requested for PID %d", pid)
-	}
-	if len(ioNet) == 1 {
-		m.networkInBytes = ioNet[0].BytesRecv
-		m.networkOutBytes = ioNet[0].BytesSent
-	}
 	return m, nil
 }
