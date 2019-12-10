@@ -13,24 +13,24 @@ import (
 )
 
 func main() {
-	namespace, procBinaryName, nameFlag, port := flags.Parse(os.Args[1:])
+	namespace, procBinaryName, nameFlag, port, interval := flags.Parse(os.Args[1:])
 	metricsSet := metrics.NewPrometheusProcessMetricsSet(namespace, procBinaryName, nameFlag)
 	mu := &sync.Mutex{}
 	updateMetricsSet(metricsSet, mu)
 	// ctx, cancelFunc := context.WithCancel(context.Background())
-	go keepMetricsUpToDate(metricsSet, mu)
+	go keepMetricsUpToDate(metricsSet, mu, time.Duration(float64(time.Second)*interval))
 	http.Handle("/metrics", newHttpMetricsRequestHandler(metricsSet, mu))
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
 
-func keepMetricsUpToDate(set *metrics.PrometheusProcessMetricsSet, mu *sync.Mutex) {
+func keepMetricsUpToDate(set *metrics.PrometheusProcessMetricsSet, mu *sync.Mutex, interval time.Duration) {
 	defer func() {
 		if r := recover(); r != nil {
 			defer func() { go func() { time.Sleep(time.Second); log.Exit(1) }() }()
 			log.Panicf("Panic in keepMetricsUpToDate(): %v", r)
 		}
 	}()
-	ticker := time.NewTicker(time.Second * 10)
+	ticker := time.NewTicker(interval)
 	for {
 		select {
 		case <-ticker.C:
