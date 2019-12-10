@@ -6,9 +6,11 @@ import (
 
 	"github.com/mitchellh/go-ps"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/log"
 )
 
 type PrometheusProcessMetrics struct {
+	previousMetrics      *ProcessMetrics
 	cpuGauge             prometheus.Gauge
 	ramGauge             prometheus.Gauge
 	swapGauge            prometheus.Gauge
@@ -20,7 +22,7 @@ type PrometheusProcessMetrics struct {
 	networkOutBytesGauge prometheus.Gauge
 }
 
-func newProcessMetrics(proc ps.Process, descriptiveName, metricNamespace string) (processMetrics *PrometheusProcessMetrics) {
+func newPrometheusProcessMetrics(proc ps.Process, descriptiveName, metricNamespace string) (processMetrics *PrometheusProcessMetrics) {
 	processMetrics = &PrometheusProcessMetrics{}
 	binaryName := filepath.Base(proc.Executable())
 	pid := fmt.Sprintf("%d", proc.Pid())
@@ -130,7 +132,14 @@ func (pm *PrometheusProcessMetrics) Update() {
 }
 
 func (pm *PrometheusProcessMetrics) Set(processMetrics *ProcessMetrics) {
-	pm.cpuGauge.Set(processMetrics.cpu)
+	if pm.previousMetrics != nil {
+		deltaTime := processMetrics.cpuSampleTime.Sub(pm.previousMetrics.cpuSampleTime).Seconds()
+		if deltaTime > 0 {
+			pm.cpuGauge.Set((processMetrics.cpuDuration - pm.previousMetrics.cpuDuration) / deltaTime)
+		} else {
+			log.Warn("deltaTime <= 0")
+		}
+	}
 	pm.ramGauge.Set(float64(processMetrics.ram))
 	pm.swapGauge.Set(float64(processMetrics.swap))
 	pm.diskReadBytesGauge.Set(float64(processMetrics.diskReadBytes))
@@ -139,4 +148,5 @@ func (pm *PrometheusProcessMetrics) Set(processMetrics *ProcessMetrics) {
 	pm.diskWriteCountGauge.Set(float64(processMetrics.diskWriteCount))
 	pm.networkInBytesGauge.Set(float64(processMetrics.networkInBytes))
 	pm.networkOutBytesGauge.Set(float64(processMetrics.networkOutBytes))
+	pm.previousMetrics = processMetrics
 }

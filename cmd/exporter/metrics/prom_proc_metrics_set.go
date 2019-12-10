@@ -9,15 +9,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type ProcessMetricsSet struct {
+type PrometheusProcessMetricsSet struct {
 	processMetrics map[int]*PrometheusProcessMetrics
 	namespace      string
 	procBinaryName string
 	nameFlag       string
 }
 
-func NewProcessMetricsSet(namespace, procBinaryName, nameFlag string) *ProcessMetricsSet {
-	return &ProcessMetricsSet{
+func NewPrometheusProcessMetricsSet(namespace, procBinaryName, nameFlag string) *PrometheusProcessMetricsSet {
+	return &PrometheusProcessMetricsSet{
 		processMetrics: make(map[int]*PrometheusProcessMetrics),
 		namespace:      namespace,
 		procBinaryName: procBinaryName,
@@ -25,7 +25,7 @@ func NewProcessMetricsSet(namespace, procBinaryName, nameFlag string) *ProcessMe
 	}
 }
 
-func (set *ProcessMetricsSet) UpdateMonitoredSet() {
+func (set *PrometheusProcessMetricsSet) UpdateMonitoredSet() {
 	if set.processMetrics == nil {
 		panic("called update on disposed ProcessMetricsSet")
 	}
@@ -36,7 +36,7 @@ func (set *ProcessMetricsSet) UpdateMonitoredSet() {
 	}
 }
 
-func (set *ProcessMetricsSet) Dispose() {
+func (set *PrometheusProcessMetricsSet) Dispose() {
 	for _, metrics := range set.processMetrics {
 		metrics.Unregister()
 	}
@@ -67,7 +67,7 @@ func AdjustMetricsMap(metricMap map[int]*PrometheusProcessMetrics, pids map[int]
 			errs = append(errs, fmt.Errorf("failed to get descriptive process name for PID %d: %w", pid, err))
 			continue
 		}
-		m := newProcessMetrics(pids[pid], name, metricNamespace)
+		m := newPrometheusProcessMetrics(pids[pid], name, metricNamespace)
 		err = m.Register()
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to register process metrics for PID %d: %w", pid, err))
@@ -99,7 +99,7 @@ func FindPidDifferences(pidMap map[int]*PrometheusProcessMetrics, wantedPids map
 	return removePids, newPids
 }
 
-func (set *ProcessMetricsSet) UpdateMetrics() {
+func (set *PrometheusProcessMetricsSet) UpdateMetrics() {
 	for pid, processMetrics := range set.processMetrics {
 		updateMetrics(processMetrics, pid)
 	}

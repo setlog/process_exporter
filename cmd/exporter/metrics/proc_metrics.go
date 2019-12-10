@@ -2,12 +2,14 @@ package metrics
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/shirou/gopsutil/process"
 )
 
 type ProcessMetrics struct {
-	cpu             float64
+	cpuDuration     float64
+	cpuSampleTime   time.Time
 	ram             uint64
 	swap            uint64
 	diskReadBytes   uint64
@@ -24,10 +26,11 @@ func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
 		return nil, fmt.Errorf("could not open PID %d: %w", pid, err)
 	}
 	m := &ProcessMetrics{}
-	m.cpu, err = proc.CPUPercent()
+	timeStat, err := proc.Times()
 	if err != nil {
-		return nil, fmt.Errorf("could not read CPU usage of PID %d: %w", pid, err)
+		return nil, fmt.Errorf("could not read CPU times of PID %d: %w", pid, err)
 	}
+	m.cpuDuration, m.cpuSampleTime = timeStat.Total(), time.Now()
 	mem, err := proc.MemoryInfo()
 	if err != nil {
 		return nil, fmt.Errorf("could not read memory info of PID %d: %w", pid, err)
