@@ -1,4 +1,4 @@
-module github.com/setlog/libvirt_exporter
+module github.com/setlog/process_exporter
 
 go 1.13
 
