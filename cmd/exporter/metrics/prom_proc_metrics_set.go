@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"flag"
 	"fmt"
 	"path/filepath"
 
@@ -14,15 +13,15 @@ type ProcessMetricsSet struct {
 	processMetrics map[int]*PrometheusProcessMetrics
 	namespace      string
 	procBinaryName string
-	procArgName    string
+	nameFlag       string
 }
 
-func NewProcessMetricsSet(namespace, procBinaryName, procArgName string) *ProcessMetricsSet {
+func NewProcessMetricsSet(namespace, procBinaryName, nameFlag string) *ProcessMetricsSet {
 	return &ProcessMetricsSet{
 		processMetrics: make(map[int]*PrometheusProcessMetrics),
 		namespace:      namespace,
 		procBinaryName: procBinaryName,
-		procArgName:    procArgName,
+		nameFlag:       nameFlag,
 	}
 }
 
@@ -31,7 +30,7 @@ func (set *ProcessMetricsSet) UpdateMonitoredSet() {
 		panic("called update on disposed ProcessMetricsSet")
 	}
 	processIds := findProcesses(set.procBinaryName)
-	errs := AdjustMetricsMap(set.processMetrics, processIds, set.namespace)
+	errs := AdjustMetricsMap(set.processMetrics, processIds, set.namespace, set.nameFlag)
 	for _, err := range errs {
 		log.Warn(fmt.Sprintf("Could not report metrics for process: %v.", err))
 	}
@@ -52,7 +51,6 @@ func findProcesses(processName string) (pids map[int]ps.Process) {
 	}
 	for _, proc := range procs {
 		name := proc.Executable()
-		fmt.Println(name)
 		if processName == "" || filepath.Base(name) == processName {
 			pid := proc.Pid()
 			pids[pid] = proc
@@ -61,10 +59,10 @@ func findProcesses(processName string) (pids map[int]ps.Process) {
 	return pids
 }
 
-func AdjustMetricsMap(metricMap map[int]*PrometheusProcessMetrics, pids map[int]ps.Process, metricNamespace string) (errs []error) {
+func AdjustMetricsMap(metricMap map[int]*PrometheusProcessMetrics, pids map[int]ps.Process, metricNamespace string, nameFlag string) (errs []error) {
 	removePids, newPids := FindPidDifferences(metricMap, pids)
 	for _, pid := range newPids {
-		name, err := procDescriptiveName(pid)
+		name, err := procDescriptiveName(pid, nameFlag)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to get descriptive process name for PID %d: %w", pid, err))
 			continue
@@ -82,7 +80,7 @@ func AdjustMetricsMap(metricMap map[int]*PrometheusProcessMetrics, pids map[int]
 		m := metricMap[pid]
 		m.Unregister()
 		delete(metricMap, pid)
-		log.Infof("Stopped monitoring of process with PID %d.", pids[pid].Pid())
+		log.Infof("Stopped monitoring of process with PID %d.", pid)
 	}
 	return errs
 }
@@ -116,7 +114,7 @@ func updateMetrics(pm *PrometheusProcessMetrics, withPid int) {
 	pm.Set(processMetrics)
 }
 
-func procDescriptiveName(pid int) (string, error) {
+func procDescriptiveName(pid int, nameFlag string) (string, error) {
 	proc, err := process.NewProcess(int32(pid))
 	if err != nil {
 		return "", err
@@ -125,23 +123,25 @@ func procDescriptiveName(pid int) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return descriptiveNameFromArgs(args)
+	return descriptiveNameFromArgs(args, nameFlag)
 }
 
-func descriptiveNameFromArgs(args []string) (string, error) {
+func descriptiveNameFromArgs(args []string, flagName string) (string, error) {
 	if len(args) <= 1 {
 		return "", fmt.Errorf("too few arguments")
 	}
 	args = args[1:]
-	flagSet := flag.NewFlagSet("", flag.ContinueOnError)
-	flagSet.Usage = func() {}
-	name := flagSet.String("name", "", "")
-	err := flagSet.Parse(args)
-	if err != nil {
-		return "", err
+	nextIsName := false
+	for _, arg := range args {
+		if nextIsName {
+			return arg, nil
+		}
+		if arg == "-"+flagName || arg == "--"+flagName {
+			nextIsName = true
+		}
 	}
-	if *name == "" {
-		return "", fmt.Errorf("name not found or empty")
+	if nextIsName {
+		return "", fmt.Errorf("no value for flag \"%s\" in args %v", flagName, args)
 	}
-	return *name, nil
+	return "", fmt.Errorf("no flag \"%s\" in args %v", flagName, args)
 }

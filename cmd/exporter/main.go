@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -10,7 +11,7 @@ import (
 )
 
 func main() {
-	namespace, procBinaryName, argName := flags.Parse(os.Args[1:])
-	http.Handle("/metrics", newHttpHandler(metrics.NewProcessMetricsSet(namespace, procBinaryName, argName)))
-	log.Fatal(http.ListenAndServe(":8771", nil))
+	namespace, procBinaryName, nameFlag, port := flags.Parse(os.Args[1:])
+	http.Handle("/metrics", newHttpHandler(metrics.NewProcessMetricsSet(namespace, procBinaryName, nameFlag)))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }

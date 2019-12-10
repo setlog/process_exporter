@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/mitchellh/go-ps"
-	"github.com/setlog/libvirt_exporter/metrics"
+	"github.com/setlog/process_exporter/cmd/exporter/metrics"
 )
 
 type proc struct {
