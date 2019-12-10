@@ -3,24 +3,32 @@ package integration
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestIntegration(t *testing.T) {
 	const port = "8771"
+	const dummyBinaryName = "prcexpintdum"
+	const dummyDescripiveName = "iamdummy"
 	run("go", "build", "-o", "exporter", "github.com/setlog/process_exporter/cmd/exporter")
 	defer os.Remove("exporter")
-	run("go", "build", "-o", "proc_exporter_integration_dummy", "github.com/setlog/process_exporter/test/dummy")
-	defer os.Remove("proc_exporter_integration_dummy")
-	cmd := exec.Command("exporter", "-port", port, "-binary", "proc_exporter_integration_dummy")
+	run("go", "build", "-o", dummyBinaryName, "github.com/setlog/process_exporter/test/dummy")
+	defer os.Remove(dummyBinaryName)
+	cmd := exec.Command("./exporter", "-port", port, "-binary", dummyBinaryName)
 	err := cmd.Start()
 	if err != nil {
 		panic(err)
 	}
-	cmdDummy := exec.Command("proc_exporter_integration_dummy", "-name", "iamdummy")
+	defer cmd.Process.Signal(os.Interrupt)
+
+	cmdDummy := exec.Command("./"+dummyBinaryName, "-name", dummyDescripiveName)
 	dummyReader, err := cmdDummy.StdoutPipe()
 	if err != nil {
 		panic(err)
@@ -29,25 +37,52 @@ func TestIntegration(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+	defer dummyWriter.Close()
 	err = cmdDummy.Start()
 	if err != nil {
 		panic(err)
 	}
-	b := make([]byte, 1, 1)
+	b := []byte{0}
 	_, err = io.ReadAtLeast(dummyReader, b, 1)
 	if err != nil {
 		panic(err)
 	}
-	resp, err := http.Get("http://localhost:" + port)
+	if b[0] != 0x2A {
+		panic(fmt.Sprintf("Byte was %x. Expected 0x2A", b[0]))
+	}
+	time.Sleep(time.Second)
+
+	resp, err := http.Get("http://localhost:" + port + "/metrics")
 	if err != nil {
 		panic(err)
 	}
+	defer resp.Body.Close()
+	dummyWriter.Close()
 	if resp.StatusCode != http.StatusOK {
 		panic(fmt.Sprintf("got code %d when %d expected", resp.StatusCode, http.StatusOK))
 	}
-	err = dummyWriter.Close()
+	contents, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
+	}
+	contentsString := string(contents)
+	lines := strings.Split(contentsString, "\n")
+	gotLine := false
+	for _, line := range lines {
+		prefix := fmt.Sprintf("mine_disk_write_bytes{bin=\"%s\",name=\"%s\",pid=\"%d\"} ", dummyBinaryName, dummyDescripiveName, cmdDummy.Process.Pid)
+		if strings.HasPrefix(line, prefix) {
+			writeBytes, err := strconv.Atoi(line[len(prefix):])
+			if err != nil {
+				panic(fmt.Sprintf("failed to parse write_bytes from line %s: %v", line, err))
+			}
+			if writeBytes < 1024 || writeBytes > 8192 {
+				panic(fmt.Sprintf("exporter reported %d bytes written. Expected something in the range [1024;8192].", writeBytes))
+			}
+			gotLine = true
+		}
+	}
+	if !gotLine {
+		panic(fmt.Sprintf("exporter did not report io byte write count"))
 	}
 	err = cmdDummy.Wait()
 	if err != nil {

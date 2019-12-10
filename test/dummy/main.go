@@ -11,7 +11,7 @@ const dummyFilePath = "dummyfile"
 func main() {
 	defer os.Remove(dummyFilePath)
 	writeTestFile()
-	fmt.Printf(".")
+	fmt.Printf("\x2A")
 	ioutil.ReadAll(os.Stdin)
 }
 
@@ -21,5 +21,7 @@ func writeTestFile() {
 		panic(err)
 	}
 	defer f.Close()
-	f.WriteString("What a beautiful string") // 23 bytes
+	for i := 0; i < 16; i++ { // Write 1024 bytes
+		f.WriteString("What a beautiful string which is exactly 64 bytes in length!!!!!")
+	}
 }
