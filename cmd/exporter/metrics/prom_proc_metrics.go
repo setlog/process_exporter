@@ -9,26 +9,24 @@ import (
 )
 
 type PrometheusProcessMetrics struct {
-	lastMetricsSnapshot    *ProcessMetrics
-	cpuGauge               prometheus.Gauge
-	ramGauge               prometheus.Gauge
-	swapGauge              prometheus.Gauge
-	diskReadBytesCounter   prometheus.Counter
-	diskWriteBytesCounter  prometheus.Counter
-	diskReadCountCounter   prometheus.Counter
-	diskWriteCountCounter  prometheus.Counter
-	networkInBytesCounter  prometheus.Counter
-	networkOutBytesCounter prometheus.Counter
+	cpuGauge             prometheus.Gauge
+	ramGauge             prometheus.Gauge
+	swapGauge            prometheus.Gauge
+	diskReadBytesGauge   prometheus.Gauge
+	diskWriteBytesGauge  prometheus.Gauge
+	diskReadCountGauge   prometheus.Gauge
+	diskWriteCountGauge  prometheus.Gauge
+	networkInBytesGauge  prometheus.Gauge
+	networkOutBytesGauge prometheus.Gauge
 }
 
 func newProcessMetrics(proc ps.Process, descriptiveName, metricNamespace string) (processMetrics *PrometheusProcessMetrics) {
 	processMetrics = &PrometheusProcessMetrics{}
-	processMetrics.lastMetricsSnapshot = &ProcessMetrics{}
 	binaryName := filepath.Base(proc.Executable())
 	pid := fmt.Sprintf("%d", proc.Pid())
 	processMetrics.makeGauges(metricNamespace, pid, binaryName, descriptiveName)
-	processMetrics.makeDiskCounters(metricNamespace, pid, binaryName, descriptiveName)
-	processMetrics.makeNetworkCounters(metricNamespace, pid, binaryName, descriptiveName)
+	processMetrics.makeDiskGauges(metricNamespace, pid, binaryName, descriptiveName)
+	processMetrics.makeNetworkGauges(metricNamespace, pid, binaryName, descriptiveName)
 	return processMetrics
 }
 
@@ -53,26 +51,26 @@ func (pm *PrometheusProcessMetrics) makeGauges(metricNamespace, pid, binaryName,
 	})
 }
 
-func (pm *PrometheusProcessMetrics) makeDiskCounters(metricNamespace, pid, binaryName, descriptiveName string) {
-	pm.diskReadBytesCounter = prometheus.NewCounter(prometheus.CounterOpts{
+func (pm *PrometheusProcessMetrics) makeDiskGauges(metricNamespace, pid, binaryName, descriptiveName string) {
+	pm.diskReadBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
 		Name:        "disk_read_bytes",
 		Help:        "Total read from disk (bytes)",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.diskWriteBytesCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	pm.diskWriteBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
 		Name:        "disk_write_bytes",
 		Help:        "Total written to disk (bytes)",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.diskReadCountCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	pm.diskReadCountGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
 		Name:        "disk_reads",
 		Help:        "Total reads from disk",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.diskWriteCountCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	pm.diskWriteCountGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
 		Name:        "disk_writes",
 		Help:        "Total writes to disk",
@@ -80,14 +78,14 @@ func (pm *PrometheusProcessMetrics) makeDiskCounters(metricNamespace, pid, binar
 	})
 }
 
-func (pm *PrometheusProcessMetrics) makeNetworkCounters(metricNamespace, pid, binaryName, descriptiveName string) {
-	pm.networkInBytesCounter = prometheus.NewCounter(prometheus.CounterOpts{
+func (pm *PrometheusProcessMetrics) makeNetworkGauges(metricNamespace, pid, binaryName, descriptiveName string) {
+	pm.networkInBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
 		Name:        "net_read_bytes",
 		Help:        "Total read from disk (bytes)",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.networkOutBytesCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	pm.networkOutBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
 		Name:        "net_write_bytes",
 		Help:        "Total written to disk (bytes)",
@@ -102,12 +100,12 @@ func (pm *PrometheusProcessMetrics) Register() error {
 		pm.cpuGauge,
 		pm.ramGauge,
 		pm.swapGauge,
-		pm.diskReadBytesCounter,
-		pm.diskWriteBytesCounter,
-		pm.diskReadCountCounter,
-		pm.diskWriteCountCounter,
-		pm.networkInBytesCounter,
-		pm.networkOutBytesCounter,
+		pm.diskReadBytesGauge,
+		pm.diskWriteBytesGauge,
+		pm.diskReadCountGauge,
+		pm.diskWriteCountGauge,
+		pm.networkInBytesGauge,
+		pm.networkOutBytesGauge,
 	} {
 		err = prometheus.Register(collector)
 		if err != nil {
@@ -135,11 +133,10 @@ func (pm *PrometheusProcessMetrics) Set(processMetrics *ProcessMetrics) {
 	pm.cpuGauge.Set(processMetrics.cpu)
 	pm.ramGauge.Set(float64(processMetrics.ram))
 	pm.swapGauge.Set(float64(processMetrics.swap))
-	pm.diskReadBytesCounter.Add(float64(processMetrics.diskReadBytes - pm.lastMetricsSnapshot.diskReadBytes))
-	pm.diskWriteBytesCounter.Add(float64(processMetrics.diskWriteBytes - pm.lastMetricsSnapshot.diskWriteBytes))
-	pm.diskReadCountCounter.Add(float64(processMetrics.diskReadCount - pm.lastMetricsSnapshot.diskReadCount))
-	pm.diskWriteCountCounter.Add(float64(processMetrics.diskWriteCount - pm.lastMetricsSnapshot.diskWriteCount))
-	pm.networkInBytesCounter.Add(float64(processMetrics.networkInBytes - pm.lastMetricsSnapshot.networkInBytes))
-	pm.networkOutBytesCounter.Add(float64(processMetrics.networkOutBytes - pm.lastMetricsSnapshot.networkOutBytes))
-	pm.lastMetricsSnapshot = processMetrics
+	pm.diskReadBytesGauge.Set(float64(processMetrics.diskReadBytes))
+	pm.diskWriteBytesGauge.Set(float64(processMetrics.diskWriteBytes))
+	pm.diskReadCountGauge.Set(float64(processMetrics.diskReadCount))
+	pm.diskWriteCountGauge.Set(float64(processMetrics.diskWriteCount))
+	pm.networkInBytesGauge.Set(float64(processMetrics.networkInBytes))
+	pm.networkOutBytesGauge.Set(float64(processMetrics.networkOutBytes))
 }

@@ -1,4 +1,4 @@
-package integration
+package metrics_test
 
 import (
 	"fmt"
@@ -15,13 +15,14 @@ import (
 
 func TestIntegration(t *testing.T) {
 	const port = "8771"
+	const exporterBinaryName = "process_exporter"
 	const dummyBinaryName = "prcexpintdum"
 	const dummyDescripiveName = "iamdummy"
-	run("go", "build", "-o", "exporter", "github.com/setlog/process_exporter/cmd/exporter")
-	defer os.Remove("exporter")
+	run("go", "build", "-o", exporterBinaryName, "github.com/setlog/process_exporter/cmd/exporter")
+	defer os.Remove(exporterBinaryName)
 	run("go", "build", "-o", dummyBinaryName, "github.com/setlog/process_exporter/test/dummy")
 	defer os.Remove(dummyBinaryName)
-	cmd := exec.Command("./exporter", "-port", port, "-binary", dummyBinaryName)
+	cmd := exec.Command("./"+exporterBinaryName, "-port", port, "-binary", dummyBinaryName)
 	err := cmd.Start()
 	if err != nil {
 		panic(err)
