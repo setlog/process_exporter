@@ -8,6 +8,10 @@ Makes available the following metrics for Prometheus for processes matching a gi
 - Disk IO (bytes)
 - Disk IO (count)
 
+### Requirements
+
+- Go 1.13
+
 ### Building
 
 ```sh
