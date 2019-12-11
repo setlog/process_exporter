@@ -108,7 +108,7 @@ func (set *PrometheusProcessMetricsSet) UpdateMetrics() {
 func updateMetrics(pm *PrometheusProcessMetrics, withPid int) {
 	processMetrics, err := getProcMetrics(withPid)
 	if err != nil {
-		log.Warn(fmt.Sprintf("Could not determine metrics for process %d: %v.", withPid, err))
+		log.Warn(fmt.Sprintf("Could not determy metrics for process %d: %v.", withPid, err))
 		return
 	}
 	pm.Set(processMetrics)
@@ -127,7 +127,10 @@ func procDescriptiveName(pid int, nameFlag string) (string, error) {
 }
 
 func descriptiveNameFromArgs(args []string, flagName string) (string, error) {
-	if len(args) <= 1 {
+	if len(args) == 0 {
+		return "", fmt.Errorf("no arguments")
+	}
+	if len(args) == 1 {
 		return "", fmt.Errorf("too few arguments")
 	}
 	args = args[1:]

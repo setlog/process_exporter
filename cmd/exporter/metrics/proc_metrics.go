@@ -8,14 +8,14 @@ import (
 )
 
 type ProcessMetrics struct {
-	cpuDuration    float64
-	cpuSampleTime  time.Time
-	ram            uint64
-	swap           uint64
-	diskReadBytes  uint64
-	diskWriteBytes uint64
-	diskReadCount  uint64
-	diskWriteCount uint64
+	cpuDuration       float64
+	cpuSampleTime     time.Time
+	ram               uint64
+	swap              uint64
+	storageReadBytes  uint64
+	storageWriteBytes uint64
+	storageReadCount  uint64
+	storageWriteCount uint64
 }
 
 func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
@@ -39,9 +39,9 @@ func getProcMetrics(pid int) (processMetrics *ProcessMetrics, err error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not read disk IO info of PID %d: %w", pid, err)
 	}
-	m.diskReadBytes = ioDisk.ReadBytes
-	m.diskWriteBytes = ioDisk.WriteBytes
-	m.diskReadCount = ioDisk.ReadCount
-	m.diskWriteCount = ioDisk.WriteCount
+	m.storageReadBytes = ioDisk.ReadBytes
+	m.storageWriteBytes = ioDisk.WriteBytes
+	m.storageReadCount = ioDisk.ReadCount
+	m.storageWriteCount = ioDisk.WriteCount
 	return m, nil
 }

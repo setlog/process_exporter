@@ -10,14 +10,15 @@ import (
 )
 
 type PrometheusProcessMetrics struct {
-	previousMetrics     *ProcessMetrics
-	cpuGauge            prometheus.Gauge
-	ramGauge            prometheus.Gauge
-	swapGauge           prometheus.Gauge
-	diskReadBytesGauge  prometheus.Gauge
-	diskWriteBytesGauge prometheus.Gauge
-	diskReadCountGauge  prometheus.Gauge
-	diskWriteCountGauge prometheus.Gauge
+	registeredCollectors      []prometheus.Collector
+	previousMetrics           *ProcessMetrics
+	cpuGauge                  prometheus.Gauge
+	ramGauge                  prometheus.Gauge
+	swapGauge                 prometheus.Gauge
+	storageReadBytesGauge     prometheus.Gauge
+	storageWriteBytesGauge    prometheus.Gauge
+	storagediskReadCountGauge prometheus.Gauge
+	storageWriteCountGauge    prometheus.Gauge
 }
 
 func newPrometheusProcessMetrics(proc ps.Process, descriptiveName, metricNamespace string) (processMetrics *PrometheusProcessMetrics) {
@@ -25,7 +26,7 @@ func newPrometheusProcessMetrics(proc ps.Process, descriptiveName, metricNamespa
 	binaryName := filepath.Base(proc.Executable())
 	pid := fmt.Sprintf("%d", proc.Pid())
 	processMetrics.makeGauges(metricNamespace, pid, binaryName, descriptiveName)
-	processMetrics.makeDiskGauges(metricNamespace, pid, binaryName, descriptiveName)
+	processMetrics.makeStorageGauges(metricNamespace, pid, binaryName, descriptiveName)
 	return processMetrics
 }
 
@@ -50,81 +51,78 @@ func (pm *PrometheusProcessMetrics) makeGauges(metricNamespace, pid, binaryName,
 	})
 }
 
-func (pm *PrometheusProcessMetrics) makeDiskGauges(metricNamespace, pid, binaryName, descriptiveName string) {
-	pm.diskReadBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+func (pm *PrometheusProcessMetrics) makeStorageGauges(metricNamespace, pid, binaryName, descriptiveName string) {
+	pm.storageReadBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
-		Name:        "disk_read_bytes",
-		Help:        "Total read from disk (bytes)",
+		Name:        "storage_read_bytes",
+		Help:        "Total read from storage (bytes)",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.diskWriteBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	pm.storageWriteBytesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
-		Name:        "disk_write_bytes",
-		Help:        "Total written to disk (bytes)",
+		Name:        "storage_write_bytes",
+		Help:        "Total written to storage (bytes)",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.diskReadCountGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	pm.storagediskReadCountGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
-		Name:        "disk_reads",
-		Help:        "Total reads from disk",
+		Name:        "storage_reads",
+		Help:        "Total reads from storage",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
-	pm.diskWriteCountGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	pm.storageWriteCountGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 		Namespace:   metricNamespace,
-		Name:        "disk_writes",
-		Help:        "Total writes to disk",
+		Name:        "storage_writes",
+		Help:        "Total writes to storage",
 		ConstLabels: prometheus.Labels{"pid": pid, "bin": binaryName, "name": descriptiveName},
 	})
 }
 
 func (pm *PrometheusProcessMetrics) Register() error {
-	registeredCollectors := make([]prometheus.Collector, 0)
+	pm.Unregister()
 	var err error
 	for _, collector := range []prometheus.Collector{
 		pm.cpuGauge,
 		pm.ramGauge,
 		pm.swapGauge,
-		pm.diskReadBytesGauge,
-		pm.diskWriteBytesGauge,
-		pm.diskReadCountGauge,
-		pm.diskWriteCountGauge,
+		pm.storageReadBytesGauge,
+		pm.storageWriteBytesGauge,
+		pm.storagediskReadCountGauge,
+		pm.storageWriteCountGauge,
 	} {
 		err = prometheus.Register(collector)
 		if err != nil {
 			break
 		}
-		registeredCollectors = append(registeredCollectors, collector)
+		pm.registeredCollectors = append(pm.registeredCollectors, collector)
 	}
 	if err != nil {
-		for _, collector := range registeredCollectors {
-			prometheus.Unregister(collector)
-		}
+		pm.Unregister()
 	}
 	return err
 }
 
 func (pm *PrometheusProcessMetrics) Unregister() {
-	prometheus.Unregister(pm.cpuGauge)
-}
-
-func (pm *PrometheusProcessMetrics) Update() {
-	prometheus.Unregister(pm.cpuGauge)
+	for _, collector := range pm.registeredCollectors {
+		prometheus.Unregister(collector)
+	}
+	pm.registeredCollectors = nil
 }
 
 func (pm *PrometheusProcessMetrics) Set(processMetrics *ProcessMetrics) {
 	if pm.previousMetrics != nil {
 		deltaTime := processMetrics.cpuSampleTime.Sub(pm.previousMetrics.cpuSampleTime).Seconds()
 		if deltaTime > 0 {
-			pm.cpuGauge.Set((processMetrics.cpuDuration - pm.previousMetrics.cpuDuration) / deltaTime)
+			pm.cpuGauge.Set(((processMetrics.cpuDuration - pm.previousMetrics.cpuDuration) * 100) / deltaTime)
 		} else {
 			log.Warn("deltaTime <= 0")
 		}
 	}
 	pm.ramGauge.Set(float64(processMetrics.ram))
 	pm.swapGauge.Set(float64(processMetrics.swap))
-	pm.diskReadBytesGauge.Set(float64(processMetrics.diskReadBytes))
-	pm.diskWriteBytesGauge.Set(float64(processMetrics.diskWriteBytes))
-	pm.diskReadCountGauge.Set(float64(processMetrics.diskReadCount))
-	pm.diskWriteCountGauge.Set(float64(processMetrics.diskWriteCount))
+	pm.storageReadBytesGauge.Set(float64(processMetrics.storageReadBytes))
+	pm.storageWriteBytesGauge.Set(float64(processMetrics.storageWriteBytes))
+	pm.storagediskReadCountGauge.Set(float64(processMetrics.storageReadCount))
+	pm.storageWriteCountGauge.Set(float64(processMetrics.storageWriteCount))
 	pm.previousMetrics = processMetrics
 }

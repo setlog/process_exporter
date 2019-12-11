@@ -69,7 +69,7 @@ func main() {
 	lines := strings.Split(contentsString, "\n")
 	gotLine := false
 	for _, line := range lines {
-		prefix := fmt.Sprintf("mine_disk_write_bytes{bin=\"%s\",name=\"%s\",pid=\"%d\"} ", dummyBinaryName, dummyDescripiveName, cmdDummy.Process.Pid)
+		prefix := fmt.Sprintf("my_storage_write_bytes{bin=\"%s\",name=\"%s\",pid=\"%d\"} ", dummyBinaryName, dummyDescripiveName, cmdDummy.Process.Pid)
 		if strings.HasPrefix(line, prefix) {
 			writeBytes, err := strconv.Atoi(line[len(prefix):])
 			if err != nil {
